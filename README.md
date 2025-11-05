@@ -385,7 +385,7 @@ make dev-test        # Run tests
 ```
 
 **For detailed local development guide, see:**
-- [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md)
+- [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)
 
 ### Building from Source
 ```bash
