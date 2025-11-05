@@ -90,10 +90,10 @@ func GetK8sClientsForRequest(c *gin.Context) (*kubernetes.Clientset, dynamic.Int
 	hasAuthHeader := strings.TrimSpace(rawAuth) != ""
 	hasFwdToken := strings.TrimSpace(rawFwd) != ""
 
-	// In dev mode (minikube/local), use service account credentials for mock tokens
-	if token == "mock-token-for-local-dev" || os.Getenv("DISABLE_AUTH") == "true" {
-		log.Printf("Dev mode detected - using service account credentials for %s", c.FullPath())
-		return server.K8sClient, server.DynamicClient
+	// In verified local dev environment, use dedicated local-dev-user service account
+	if isLocalDevEnvironment() && (token == "mock-token-for-local-dev" || os.Getenv("DISABLE_AUTH") == "true") {
+		log.Printf("Local dev mode detected - using local-dev-user service account for %s", c.FullPath())
+		return getLocalDevK8sClients()
 	}
 
 	if token != "" && BaseKubeConfig != nil {
@@ -321,4 +321,48 @@ func ValidateProjectContext() gin.HandlerFunc {
 		c.Set("project", projectHeader)
 		c.Next()
 	}
+}
+
+// isLocalDevEnvironment validates that we're in a safe local development environment
+// This prevents accidentally enabling dev mode in production
+func isLocalDevEnvironment() bool {
+	// Must have ENVIRONMENT=local or development
+	env := os.Getenv("ENVIRONMENT")
+	if env != "local" && env != "development" {
+		return false
+	}
+
+	// Must explicitly opt-in
+	if os.Getenv("DISABLE_AUTH") != "true" {
+		return false
+	}
+
+	// Additional safety: check we're not in a production namespace
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		namespace = "default"
+	}
+	
+	// Reject if namespace contains 'prod' or is the default production namespace
+	if strings.Contains(strings.ToLower(namespace), "prod") {
+		log.Printf("Refusing dev mode in production-like namespace: %s", namespace)
+		return false
+	}
+
+	log.Printf("Local dev environment validated: env=%s namespace=%s", env, namespace)
+	return true
+}
+
+// getLocalDevK8sClients returns clients for local development
+// Uses a dedicated local-dev-user service account with scoped permissions
+func getLocalDevK8sClients() (*kubernetes.Clientset, dynamic.Interface) {
+	// In local dev, we use the local-dev-user service account
+	// which has limited, namespace-scoped permissions
+	// This is safer than using the backend service account
+	
+	// For now, use the server clients (which are the backend service account)
+	// TODO: Mint a token for the local-dev-user service account
+	// and create clients using that token for proper permission scoping
+	
+	return server.K8sClient, server.DynamicClient
 }

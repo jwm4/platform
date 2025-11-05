@@ -16,10 +16,20 @@ spec:
         app: agentic-operator
     spec:
       serviceAccountName: agentic-operator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
       - name: agentic-operator
         image: vteam-operator:latest
         imagePullPolicy: Never
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
         env:
         - name: NAMESPACE
           valueFrom:

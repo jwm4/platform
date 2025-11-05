@@ -17,10 +17,20 @@ spec:
         role: backend
     spec:
       serviceAccountName: backend-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
       - name: backend-api
         image: vteam-backend:latest
         imagePullPolicy: Never
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
         ports:
         - containerPort: 8080
           name: http
@@ -45,6 +55,8 @@ spec:
           value: "Never"
         - name: DISABLE_AUTH
           value: "true"
+        - name: ENVIRONMENT
+          value: "local"
         - name: GITHUB_APP_ID
           valueFrom:
             secretKeyRef:

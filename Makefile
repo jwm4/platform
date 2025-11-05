@@ -98,6 +98,8 @@ NAMESPACE ?= ambient-code
 
 local-start: ## Start minikube and deploy vTeam
 	@command -v minikube >/dev/null || (echo "❌ Please install minikube first: https://minikube.sigs.k8s.io/docs/start/" && exit 1)
+	@echo "🔍 Validating environment..."
+	@kubectl config current-context | grep -q minikube || (echo "❌ Not connected to minikube! Current context: $$(kubectl config current-context)" && exit 1)
 	@echo "🚀 Starting minikube..."
 	@minikube start --memory=4096 --cpus=2 || true
 	@echo "📦 Enabling required addons..."
@@ -114,6 +116,7 @@ local-start: ## Start minikube and deploy vTeam
 	@kubectl apply -f components/manifests/crds/ || true
 	@echo "🔐 Deploying RBAC..."
 	@kubectl apply -f components/manifests/rbac/ || true
+	@kubectl apply -f components/manifests/minikube/local-dev-rbac.yaml
 	@echo "💾 Creating PVCs..."
 	@kubectl apply -f components/manifests/workspace-pvc.yaml -n $(NAMESPACE) || true
 	@echo "🚀 Deploying backend..."
@@ -128,10 +131,11 @@ local-start: ## Start minikube and deploy vTeam
 	@echo "   Waiting for ingress controller to be ready..."
 	@kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s || true
 	@kubectl apply -f components/manifests/minikube/ingress.yaml || echo "   ⚠️  Ingress creation failed (controller may still be starting)"
-	@echo "🔑 Granting backend permissions..."
-	@kubectl create clusterrolebinding backend-admin --clusterrole=cluster-admin --serviceaccount=$(NAMESPACE):backend-api --dry-run=client -o yaml | kubectl apply -f -
 	@echo ""
 	@echo "✅ Deployment complete!"
+	@echo ""
+	@echo "⚠️  SECURITY NOTE: Authentication is DISABLED for local development only."
+	@echo "⚠️  DO NOT use this configuration in production!"
 	@echo ""
 	@echo "📍 Access URLs:"
 	@echo "   Add to /etc/hosts: 127.0.0.1 vteam.local"
