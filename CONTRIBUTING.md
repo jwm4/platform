@@ -75,7 +75,7 @@ Before contributing, ensure you have:
 - Go 1.24+ (for backend/operator development)
 - Node.js 20+ and npm (for frontend development)
 - Python 3.11+ (for runner development)
-- Docker or Podman (for building containers)
+- Podman or Docker (for building containers)
 - Minikube or access to an OpenShift/Kubernetes cluster
 - Git for version control
 

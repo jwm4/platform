@@ -13,7 +13,7 @@ This guide explains how to set up and use the minikube-based local development e
 
 ## Prerequisites
 
-- Docker
+- Podman
 - Minikube
 - kubectl
 
@@ -21,9 +21,14 @@ This guide explains how to set up and use the minikube-based local development e
 
 ```bash
 # macOS
-brew install minikube kubectl
+brew install podman minikube kubectl
 
-# Linux
+# Linux - Podman
+sudo apt-get install podman  # Debian/Ubuntu
+# OR
+sudo dnf install podman      # Fedora/RHEL
+
+# Linux - Minikube
 curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
 ```
@@ -109,8 +114,8 @@ make local-delete            # Delete minikube cluster
 1. Make code changes
 2. Rebuild images:
    ```bash
-   eval $(minikube docker-env)
-   docker build -t vteam-backend:latest components/backend
+   eval $(minikube -p minikube podman-env)
+   podman build -t vteam-backend:latest components/backend
    ```
 3. Restart deployment:
    ```bash

@@ -5,22 +5,22 @@ help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Configuration Variables:'
-	@echo '  CONTAINER_ENGINE   Container engine to use (default: docker, can be set to podman)'
+	@echo '  CONTAINER_ENGINE   Container engine to use (default: podman, can be set to docker)'
 	@echo '  PLATFORM           Target platform (e.g., linux/amd64, linux/arm64)'
 	@echo '  BUILD_FLAGS        Additional flags to pass to build command'
 	@echo '  REGISTRY           Container registry for push operations'
 	@echo ''
 	@echo 'Examples:'
-	@echo '  make build-all CONTAINER_ENGINE=podman'
+	@echo '  make build-all CONTAINER_ENGINE=docker'
 	@echo '  make build-all PLATFORM=linux/amd64'
 	@echo '  make build-all BUILD_FLAGS="--no-cache --pull"'
-	@echo '  make build-all CONTAINER_ENGINE=podman PLATFORM=linux/arm64'
+	@echo '  make build-all CONTAINER_ENGINE=docker PLATFORM=linux/arm64'
 	@echo ''
 	@echo 'Targets:'
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # Container engine configuration
-CONTAINER_ENGINE ?= docker
+CONTAINER_ENGINE ?= podman
 PLATFORM ?= linux/amd64
 BUILD_FLAGS ?= 
 
@@ -106,10 +106,10 @@ local-start: ## Start minikube and deploy vTeam
 	@minikube addons enable ingress
 	@minikube addons enable storage-provisioner
 	@echo "🏗️  Building images in minikube..."
-	@eval $$(minikube docker-env) && \
-		docker build -t vteam-backend:latest components/backend && \
-		docker build -t vteam-frontend:latest components/frontend && \
-		docker build -t vteam-operator:latest components/operator
+	@eval $$(minikube -p minikube $(CONTAINER_ENGINE)-env) && \
+		$(CONTAINER_ENGINE) build -t vteam-backend:latest components/backend && \
+		$(CONTAINER_ENGINE) build -t vteam-frontend:latest components/frontend && \
+		$(CONTAINER_ENGINE) build -t vteam-operator:latest components/operator
 	@echo "📋 Creating namespace..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@echo "🔧 Deploying CRDs..."

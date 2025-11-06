@@ -91,7 +91,7 @@ The platform consists of containerized microservices orchestrated via Kubernetes
 ### Required Tools
 - **Minikube** for local development or **OpenShift cluster** for production
 - **kubectl** v1.28+ configured to access your cluster
-- **Docker or Podman** for building container images
+- **Podman** for building container images (or Docker as alternative)
 - **Container registry access** (Docker Hub, Quay.io, ECR, etc.) for production
 - **Go 1.24+** for building backend services (if building from source)
 - **Node.js 20+** and **npm** for the frontend (if building from source)
@@ -188,8 +188,11 @@ REGISTRY=$REGISTRY ./deploy.sh
 ### Container Engine Options
 
 ```bash
-# Use Podman instead of Docker
-make build-all CONTAINER_ENGINE=podman
+# Build with Podman (default)
+make build-all
+
+# Use Docker instead of Podman
+make build-all CONTAINER_ENGINE=docker
 
 # Build for specific platform
 # Default is linux/amd64
