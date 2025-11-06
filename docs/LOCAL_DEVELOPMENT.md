@@ -114,13 +114,18 @@ make local-delete            # Delete minikube cluster
 1. Make code changes
 2. Rebuild images:
    ```bash
-   eval $(minikube -p minikube podman-env)
+   # Build with Podman (default)
    podman build -t vteam-backend:latest components/backend
+   
+   # Load into minikube
+   minikube image load vteam-backend:latest
    ```
 3. Restart deployment:
    ```bash
    make local-restart-backend
    ```
+
+**Note:** Images are built locally with Podman and then loaded into minikube using `minikube image load`. This approach works with any container runtime configuration in minikube.
 
 ## Troubleshooting
 

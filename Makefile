@@ -105,11 +105,14 @@ local-start: ## Start minikube and deploy vTeam
 	@echo "📦 Enabling required addons..."
 	@minikube addons enable ingress
 	@minikube addons enable storage-provisioner
-	@echo "🏗️  Building images in minikube..."
-	@eval $$(minikube -p minikube $(CONTAINER_ENGINE)-env) && \
-		$(CONTAINER_ENGINE) build -t vteam-backend:latest components/backend && \
-		$(CONTAINER_ENGINE) build -t vteam-frontend:latest components/frontend && \
-		$(CONTAINER_ENGINE) build -t vteam-operator:latest components/operator
+	@echo "🏗️  Building images with $(CONTAINER_ENGINE)..."
+	@$(CONTAINER_ENGINE) build -t vteam-backend:latest components/backend
+	@$(CONTAINER_ENGINE) build -t vteam-frontend:latest components/frontend
+	@$(CONTAINER_ENGINE) build -t vteam-operator:latest components/operator
+	@echo "📥 Loading images into minikube..."
+	@minikube image load vteam-backend:latest
+	@minikube image load vteam-frontend:latest
+	@minikube image load vteam-operator:latest
 	@echo "📋 Creating namespace..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	@echo "🔧 Deploying CRDs..."
