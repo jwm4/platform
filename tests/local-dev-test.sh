@@ -862,9 +862,72 @@ test_critical_token_minting() {
     log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
+# Test: Production Manifest Safety - No Dev Mode Variables
+test_production_manifest_safety() {
+    log_section "Test 27: Production Manifest Safety"
+    
+    log_info "Verifying production manifests do NOT contain dev mode variables..."
+    
+    # Check base/production manifests for DISABLE_AUTH
+    local prod_manifests=(
+        "components/manifests/base/backend-deployment.yaml"
+        "components/manifests/base/frontend-deployment.yaml"
+        "components/manifests/overlays/production/frontend-oauth-deployment-patch.yaml"
+    )
+    
+    local found_issues=false
+    
+    for manifest in "${prod_manifests[@]}"; do
+        if [ ! -f "$manifest" ]; then
+            log_warning "Manifest not found: $manifest (may be in subdirectory)"
+            continue
+        fi
+        
+        # Check for DISABLE_AUTH
+        if grep -q "DISABLE_AUTH" "$manifest" 2>/dev/null; then
+            log_error "Production manifest contains DISABLE_AUTH: $manifest"
+            log_error "  This would enable dev mode in production (CRITICAL SECURITY ISSUE)"
+            ((FAILED_TESTS++))
+            found_issues=true
+        else
+            log_success "Production manifest clean (no DISABLE_AUTH): $manifest"
+            ((PASSED_TESTS++))
+        fi
+        
+        # Check for ENVIRONMENT=local or development
+        if grep -qE "ENVIRONMENT.*[\"']?(local|development)[\"']?" "$manifest" 2>/dev/null; then
+            log_error "Production manifest sets ENVIRONMENT=local/development: $manifest"
+            log_error "  This would enable dev mode in production (CRITICAL SECURITY ISSUE)"
+            ((FAILED_TESTS++))
+            found_issues=true
+        else
+            log_success "Production manifest clean (no ENVIRONMENT=local): $manifest"
+            ((PASSED_TESTS++))
+        fi
+    done
+    
+    # Verify minikube manifests DO have dev mode (sanity check)
+    if [ -f "components/manifests/minikube/backend-deployment.yaml" ]; then
+        if grep -q "DISABLE_AUTH" "components/manifests/minikube/backend-deployment.yaml" 2>/dev/null; then
+            log_success "Minikube manifest correctly includes DISABLE_AUTH (expected for local dev)"
+            ((PASSED_TESTS++))
+        else
+            log_error "Minikube manifest missing DISABLE_AUTH (dev mode broken)"
+            ((FAILED_TESTS++))
+        fi
+    fi
+    
+    if [ "$found_issues" = false ]; then
+        log_info ""
+        log_info "✅ Production manifests are safe"
+        log_info "✅ Dev mode only in components/manifests/minikube/"
+        log_info "✅ Clear separation between dev and production configs"
+    fi
+}
+
 # Test: Backend Using Wrong Service Account
 test_critical_backend_sa_usage() {
-    log_section "Test 27: CRITICAL - Backend Using Wrong Service Account"
+    log_section "Test 28: CRITICAL - Backend Using Wrong Service Account"
     
     log_info "Verifying which service account backend uses in dev mode..."
     
@@ -969,6 +1032,9 @@ main() {
     test_security_mock_token_logging
     test_security_token_redaction
     test_security_service_account_config
+    
+    # Production safety tests
+    test_production_manifest_safety
     
     # CRITICAL failing tests for unimplemented features
     test_critical_token_minting
