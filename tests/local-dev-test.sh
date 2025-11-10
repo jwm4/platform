@@ -528,14 +528,18 @@ test_ingress_controller() {
 test_security_local_dev_user() {
     log_section "Test 21: Security - Local Dev User Permissions"
     
-    log_info "Verifying local-dev-user service account has restricted permissions..."
+    log_info "Verifying local-dev-user service account implementation status..."
     
-    # Check if local-dev-user service account exists
+    # CRITICAL TEST: Check if local-dev-user service account exists
     if kubectl get serviceaccount local-dev-user -n "$NAMESPACE" >/dev/null 2>&1; then
         log_success "local-dev-user service account exists"
         ((PASSED_TESTS++))
     else
-        log_warning "local-dev-user service account does not exist (TODO: not yet implemented)"
+        log_error "local-dev-user service account does NOT exist"
+        log_error "CRITICAL: This is required for proper permission scoping in dev mode"
+        log_error "TODO: Create local-dev-user ServiceAccount with namespace-scoped permissions"
+        log_error "Reference: components/backend/handlers/middleware.go:323-335"
+        ((FAILED_TESTS++))
         return
     fi
     
@@ -559,7 +563,8 @@ test_security_local_dev_user() {
         log_success "local-dev-user CANNOT list all namespaces (correct - namespace-scoped)"
         ((PASSED_TESTS++))
     else
-        log_warning "local-dev-user CAN list namespaces (may have elevated permissions)"
+        log_error "local-dev-user CAN list namespaces (SECURITY ISSUE - too broad permissions)"
+        ((FAILED_TESTS++))
     fi
     
     # Test 3: Should be able to access resources in ambient-code namespace
@@ -571,6 +576,18 @@ test_security_local_dev_user() {
         ((PASSED_TESTS++))
     else
         log_error "local-dev-user CANNOT list pods in ambient-code namespace (too restricted)"
+        ((FAILED_TESTS++))
+    fi
+    
+    # Test 4: Should be able to manage CRDs in ambient-code namespace
+    local can_list_sessions
+    can_list_sessions=$(kubectl auth can-i list agenticsessions.vteam.ambient-code --namespace=ambient-code --as=system:serviceaccount:ambient-code:local-dev-user 2>/dev/null || echo "no")
+    
+    if [ "$can_list_sessions" = "yes" ]; then
+        log_success "local-dev-user CAN list agenticsessions (correct - needs CR access)"
+        ((PASSED_TESTS++))
+    else
+        log_error "local-dev-user CANNOT list agenticsessions (needs CR permissions)"
         ((FAILED_TESTS++))
     fi
 }
@@ -764,6 +781,155 @@ test_security_service_account_config() {
     ((PASSED_TESTS++))
 }
 
+# Test: CRITICAL - Token Minting Implementation
+test_critical_token_minting() {
+    log_section "Test 26: CRITICAL - Token Minting for local-dev-user"
+    
+    log_error "═══════════════════════════════════════════════════════════════"
+    log_error "CRITICAL TODO: Token minting NOT implemented"
+    log_error "═══════════════════════════════════════════════════════════════"
+    log_info ""
+    log_info "Current implementation (middleware.go:323-335):"
+    log_info "  getLocalDevK8sClients() returns server.K8sClient, server.DynamicClient"
+    log_info "  This uses the BACKEND SERVICE ACCOUNT (cluster-admin)"
+    log_info ""
+    log_error "Required implementation:"
+    log_error "  1. Create local-dev-user ServiceAccount in ambient-code namespace"
+    log_error "  2. Mint a token for local-dev-user using TokenRequest API"
+    log_error "  3. Create K8s clients using the minted token"
+    log_error "  4. Return clients with namespace-scoped permissions"
+    log_info ""
+    
+    # Test 1: Check if local-dev-user ServiceAccount exists
+    if kubectl get serviceaccount local-dev-user -n "$NAMESPACE" >/dev/null 2>&1; then
+        log_success "Step 1/4: local-dev-user ServiceAccount exists"
+        ((PASSED_TESTS++))
+    else
+        log_error "Step 1/4: local-dev-user ServiceAccount does NOT exist"
+        log_error "  Create with: kubectl create serviceaccount local-dev-user -n ambient-code"
+        ((FAILED_TESTS++))
+    fi
+    
+    # Test 2: Check if RBAC for local-dev-user is configured
+    local has_rolebinding=false
+    if kubectl get rolebinding -n "$NAMESPACE" -o json 2>/dev/null | grep -q "local-dev-user"; then
+        log_success "Step 2/4: local-dev-user has RoleBinding in namespace"
+        ((PASSED_TESTS++))
+        has_rolebinding=true
+    else
+        log_error "Step 2/4: local-dev-user has NO RoleBinding"
+        log_error "  Required: RoleBinding granting namespace-scoped permissions"
+        log_error "  Should grant: list/get/create/update/delete on CRDs, pods, services"
+        ((FAILED_TESTS++))
+    fi
+    
+    # Test 3: Verify token minting capability (TokenRequest API)
+    log_error "Step 3/4: Token minting NOT implemented in code"
+    log_error "  Current: Returns server.K8sClient (backend SA with cluster-admin)"
+    log_error "  Required: Mint token using K8sClient.CoreV1().ServiceAccounts().CreateToken()"
+    log_error "  Code location: components/backend/handlers/middleware.go:323-335"
+    ((FAILED_TESTS++))
+    
+    # Test 4: Verify getLocalDevK8sClients uses minted token
+    log_error "Step 4/4: getLocalDevK8sClients NOT using minted token"
+    log_error "  Current: return server.K8sClient, server.DynamicClient"
+    log_error "  Required: return kubernetes.NewForConfig(cfg), dynamic.NewForConfig(cfg)"
+    log_error "  Where cfg uses minted token with namespace-scoped permissions"
+    ((FAILED_TESTS++))
+    
+    # Summary
+    log_info ""
+    log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_error "SECURITY IMPACT:"
+    log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_error "  ❌ Local dev currently uses backend SA (cluster-admin)"
+    log_error "  ❌ No permission scoping in dev mode"
+    log_error "  ❌ Dev users have unrestricted cluster access"
+    log_error "  ❌ Cannot test RBAC restrictions locally"
+    log_info ""
+    log_info "NEXT STEPS:"
+    log_info "  1. Create manifests/minikube/local-dev-rbac.yaml with:"
+    log_info "     - ServiceAccount: local-dev-user"
+    log_info "     - Role: ambient-local-dev (namespace-scoped permissions)"
+    log_info "     - RoleBinding: local-dev-user → ambient-local-dev"
+    log_info ""
+    log_info "  2. Update getLocalDevK8sClients() in middleware.go:"
+    log_info "     - Get local-dev-user ServiceAccount"
+    log_info "     - Mint token using CreateToken() API"
+    log_info "     - Create clients with minted token"
+    log_info ""
+    log_info "  3. Test with: ./tests/local-dev-test.sh"
+    log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Test: Backend Using Wrong Service Account
+test_critical_backend_sa_usage() {
+    log_section "Test 27: CRITICAL - Backend Using Wrong Service Account"
+    
+    log_info "Verifying which service account backend uses in dev mode..."
+    
+    # Get backend pod
+    local backend_pod
+    backend_pod=$(kubectl get pods -n "$NAMESPACE" -l app=backend-api -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    
+    if [ -z "$backend_pod" ]; then
+        log_warning "Backend pod not found, skipping SA usage test"
+        return
+    fi
+    
+    # Check which service account the backend pod is using
+    local backend_sa
+    backend_sa=$(kubectl get pod "$backend_pod" -n "$NAMESPACE" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null)
+    
+    log_info "Backend pod service account: $backend_sa"
+    
+    # Check if backend has cluster-admin via clusterrolebinding
+    local has_cluster_admin=false
+    if kubectl get clusterrolebinding -o json 2>/dev/null | grep -q "serviceaccount:$NAMESPACE:$backend_sa"; then
+        has_cluster_admin=true
+        log_error "Backend SA '$backend_sa' has cluster-level role bindings"
+        
+        # List the actual bindings
+        log_error "Cluster role bindings for backend SA:"
+        kubectl get clusterrolebinding -o json 2>/dev/null | jq -r ".items[] | select(.subjects[]?.name == \"$backend_sa\") | \"  - \(.metadata.name): \(.roleRef.name)\"" 2>/dev/null || echo "  (could not enumerate)"
+        
+        ((FAILED_TESTS++))
+    else
+        log_success "Backend SA '$backend_sa' has NO cluster-level bindings (good for prod model)"
+        ((PASSED_TESTS++))
+    fi
+    
+    # The critical issue: getLocalDevK8sClients returns server.K8sClient
+    log_error ""
+    log_error "CRITICAL ISSUE:"
+    log_error "  getLocalDevK8sClients() returns server.K8sClient, server.DynamicClient"
+    log_error "  These clients use the '$backend_sa' service account"
+    if [ "$has_cluster_admin" = true ]; then
+        log_error "  This SA has cluster-admin permissions (full cluster access)"
+    fi
+    log_error ""
+    log_error "EXPECTED BEHAVIOR:"
+    log_error "  getLocalDevK8sClients() should return clients using local-dev-user token"
+    log_error "  local-dev-user should have namespace-scoped permissions only"
+    log_error "  Dev mode should mimic production RBAC restrictions"
+    log_error ""
+    ((FAILED_TESTS++))
+    
+    # Test: Verify TODO comment exists in code
+    log_info "Checking for TODO comment in middleware.go..."
+    if [ -f "components/backend/handlers/middleware.go" ]; then
+        if grep -q "TODO: Mint a token for the local-dev-user" components/backend/handlers/middleware.go; then
+            log_success "TODO comment exists in middleware.go (tracked)"
+            ((PASSED_TESTS++))
+        else
+            log_error "TODO comment NOT found in middleware.go"
+            ((FAILED_TESTS++))
+        fi
+    else
+        log_warning "middleware.go not found in current directory"
+    fi
+}
+
 # Main test execution
 main() {
     log_section "Ambient Code Platform - Local Developer Experience Tests"
@@ -803,6 +969,10 @@ main() {
     test_security_mock_token_logging
     test_security_token_redaction
     test_security_service_account_config
+    
+    # CRITICAL failing tests for unimplemented features
+    test_critical_token_minting
+    test_critical_backend_sa_usage
     
     # Summary
     log_section "Test Summary"
