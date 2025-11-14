@@ -27,99 +27,43 @@ jobs:
         kubectl version --client
         minikube version
     
-    - name: Start minikube
+    - name: Validate Makefile
       run: |
-        minikube start --driver=docker --memory=4096 --cpus=2
-        minikube addons enable ingress
-        minikube addons enable storage-provisioner
-        kubectl cluster-info
+        echo "Validating Makefile quality..."
+        make validate-makefile
         
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-      
-    - name: Build and load images
+    - name: Deploy using Makefile
       run: |
-        # Build images using minikube's docker daemon
-        eval $(minikube docker-env)
+        echo "Using Makefile to deploy complete stack..."
+        make local-up CONTAINER_ENGINE=docker
         
-        echo "Building backend..."
-        docker build -t vteam-backend:latest components/backend
-        
-        echo "Building frontend..."
-        docker build -t vteam-frontend:latest components/frontend
-        
-        echo "Building operator..."
-        docker build -t vteam-operator:latest components/operator
-        
-        echo "Images built successfully"
-        docker images | grep vteam
+    - name: Wait for deployments
+      run: |
+        echo "Waiting for deployments to be ready..."
+        kubectl wait --for=condition=available --timeout=180s deployment/backend-api -n ambient-code || {
+          echo "⚠️  Backend deployment timeout - showing status"
+          kubectl get pods -n ambient-code -o wide
+          kubectl describe deployment backend-api -n ambient-code | tail -50
+        }
+        kubectl wait --for=condition=available --timeout=180s deployment/frontend -n ambient-code || {
+          echo "⚠️  Frontend deployment timeout - showing status"
+          kubectl get pods -n ambient-code -o wide
+          kubectl describe deployment frontend -n ambient-code | tail -50
+        }
+        kubectl wait --for=condition=available --timeout=180s deployment/agentic-operator -n ambient-code || {
+          echo "⚠️  Operator deployment timeout - showing status"
+          kubectl get pods -n ambient-code -o wide
+          kubectl describe deployment agentic-operator -n ambient-code | tail -50
+        }
     
-    - name: Deploy application
+    - name: Run Makefile smoke tests
       run: |
-        echo "Creating namespace..."
-        kubectl create namespace ambient-code
-        kubectl label namespace ambient-code ambient-code.io/managed=true
-        
-        echo "Installing CRDs..."
-        kubectl apply -f components/manifests/base/crds/agenticsessions-crd.yaml
-        kubectl apply -f components/manifests/base/crds/projectsettings-crd.yaml
-        
-        echo "Creating PersistentVolumeClaim..."
-        kubectl apply -f components/manifests/base/workspace-pvc.yaml -n ambient-code
-        
-        echo "Setting up RBAC..."
-        kubectl apply -f components/manifests/minikube/local-dev-rbac.yaml
-        kubectl apply -f components/manifests/base/rbac/cluster-roles.yaml
-        kubectl apply -f components/manifests/base/rbac/backend-clusterrole.yaml
-        kubectl apply -f components/manifests/base/rbac/backend-clusterrolebinding.yaml
-        kubectl apply -f components/manifests/base/rbac/operator-clusterrole.yaml
-        kubectl apply -f components/manifests/base/rbac/operator-clusterrolebinding.yaml
-        
-        echo "Deploying backend..."
-        kubectl apply -f components/manifests/minikube/backend-deployment.yaml
-        kubectl apply -f components/manifests/minikube/backend-service.yaml
-        
-        echo "Deploying frontend..."
-        kubectl apply -f components/manifests/minikube/frontend-deployment.yaml
-        kubectl apply -f components/manifests/minikube/frontend-service.yaml
-        
-        echo "Deploying operator..."
-        kubectl apply -f components/manifests/minikube/operator-deployment.yaml
-        
-        echo "Setting up ingress..."
-        kubectl apply -f components/manifests/minikube/ingress.yaml
-        
-        echo "Checking deployment objects..."
-        kubectl get deployments -n ambient-code -o wide
-        
-        echo ""
-        echo "Waiting for deployments to be ready (will timeout if pods fail)..."
-        kubectl wait --for=condition=available --timeout=180s deployment/backend-api -n ambient-code || echo "⚠️  Backend deployment timeout"
-        kubectl wait --for=condition=available --timeout=180s deployment/frontend -n ambient-code || echo "⚠️  Frontend deployment timeout"
-        kubectl wait --for=condition=available --timeout=180s deployment/agentic-operator -n ambient-code || echo "⚠️  Operator deployment timeout"
-        
-        echo ""
-        echo "Pod status:"
-        kubectl get pods -n ambient-code -o wide || echo "No pods found"
-        
-        echo ""
-        echo "Events (last 20):"
-        kubectl get events -n ambient-code --sort-by='.lastTimestamp' | tail -20 || true
-        
-        echo ""
-        echo "Deployment details:"
-        kubectl describe deployments -n ambient-code | grep -A 10 "Conditions:\|Events:" || true
-        
-        echo ""
-        echo "ReplicaSets:"
-        kubectl get replicasets -n ambient-code -o wide || true
-        
-        echo ""
-        echo "Checking for pod failures..."
-        if kubectl get pods -n ambient-code 2>/dev/null | grep -q "ImagePullBackOff\|CrashLoopBackOff\|Error"; then
-          echo "⚠️  Found pods with errors - describing them:"
-          kubectl describe pods -n ambient-code || true
-        fi
+        echo "Running Makefile smoke tests..."
+        make local-test-quick CONTAINER_ENGINE=docker || {
+          echo "Smoke tests failed - showing debugging information..."
+          make local-troubleshoot
+          exit 1
+        }
     
     - name: Run comprehensive test suite
       run: |
@@ -129,17 +73,7 @@ jobs:
         # Run tests in CI mode (known failures tracked separately)
         ./tests/local-dev-test.sh --skip-setup --ci || {
           echo "Test suite failed - showing debugging information..."
-          
-          # Show pod logs for debugging
-          echo "=== Backend logs ==="
-          kubectl logs -n ambient-code -l app=backend-api --tail=100 || true
-          
-          echo "=== Operator logs ==="
-          kubectl logs -n ambient-code -l app=agentic-operator --tail=100 || true
-          
-          echo "=== Frontend logs ==="
-          kubectl logs -n ambient-code -l app=frontend --tail=50 || true
-          
+          make local-troubleshoot
           exit 1
         }
     
@@ -211,5 +145,5 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        kubectl delete namespace ambient-code --ignore-not-found=true || true
-        minikube delete || true
+        echo "Cleaning up using Makefile..."
+        make local-clean || true

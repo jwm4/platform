@@ -4,6 +4,7 @@
 .PHONY: local-test local-test-dev local-test-quick test-all local-url local-troubleshoot local-port-forward
 .PHONY: push-all registry-login setup-hooks remove-hooks check-minikube check-kubectl
 .PHONY: e2e-test e2e-setup e2e-clean deploy-langfuse-openshift
+.PHONY: validate-makefile lint-makefile check-shell makefile-health
 
 # Default target
 .DEFAULT_GOAL := help
@@ -42,10 +43,14 @@ help: ## Display this help message
 	@echo '$(COLOR_BOLD)Ambient Code Platform - Development Makefile$(COLOR_RESET)'
 	@echo ''
 	@echo '$(COLOR_BOLD)Quick Start:$(COLOR_RESET)'
-	@echo '  $(COLOR_GREEN)make local-up$(COLOR_RESET)       Start local development environment'
-	@echo '  $(COLOR_GREEN)make local-status$(COLOR_RESET)   Check status of local environment'
-	@echo '  $(COLOR_GREEN)make local-logs$(COLOR_RESET)     View logs from all components'
-	@echo '  $(COLOR_GREEN)make local-down$(COLOR_RESET)     Stop local environment'
+	@echo '  $(COLOR_GREEN)make local-up$(COLOR_RESET)            Start local development environment'
+	@echo '  $(COLOR_GREEN)make local-status$(COLOR_RESET)        Check status of local environment'
+	@echo '  $(COLOR_GREEN)make local-logs$(COLOR_RESET)          View logs from all components'
+	@echo '  $(COLOR_GREEN)make local-down$(COLOR_RESET)          Stop local environment'
+	@echo ''
+	@echo '$(COLOR_BOLD)Quality Assurance:$(COLOR_RESET)'
+	@echo '  $(COLOR_GREEN)make validate-makefile$(COLOR_RESET)   Validate Makefile quality (runs in CI)'
+	@echo '  $(COLOR_GREEN)make makefile-health$(COLOR_RESET)     Run comprehensive health check'
 	@echo ''
 	@awk 'BEGIN {FS = ":.*##"; printf "$(COLOR_BOLD)Available Targets:$(COLOR_RESET)\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(COLOR_BLUE)%-20s$(COLOR_RESET) %s\n", $$1, $$2 } /^##@/ { printf "\n$(COLOR_BOLD)%s$(COLOR_RESET)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 	@echo ''
@@ -213,6 +218,67 @@ local-reload-operator: ## Rebuild and reload operator only
 ##@ Testing
 
 test-all: local-test-quick local-test-dev ## Run all tests (quick + comprehensive)
+
+##@ Quality Assurance
+
+validate-makefile: lint-makefile check-shell ## Validate Makefile quality and syntax
+	@echo "$(COLOR_GREEN)✓ Makefile validation passed$(COLOR_RESET)"
+
+lint-makefile: ## Lint Makefile for syntax and best practices
+	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Linting Makefile..."
+	@# Check that all targets have help text or are internal/phony
+	@missing_help=$$(awk '/^[a-zA-Z_-]+:/ && !/##/ && !/^_/ && !/^\.PHONY/ && !/^\.DEFAULT_GOAL/' $(MAKEFILE_LIST)); \
+	if [ -n "$$missing_help" ]; then \
+		echo "$(COLOR_YELLOW)⚠$(COLOR_RESET)  Targets missing help text:"; \
+		echo "$$missing_help" | head -5; \
+	fi
+	@# Check for common mistakes
+	@if grep -n "^\t " $(MAKEFILE_LIST) | grep -v "^#" >/dev/null 2>&1; then \
+		echo "$(COLOR_RED)✗$(COLOR_RESET) Found tabs followed by spaces (use tabs only for indentation)"; \
+		grep -n "^\t " $(MAKEFILE_LIST) | head -3; \
+		exit 1; \
+	fi
+	@# Check for undefined variable references (basic check)
+	@if grep -E '\$$[^($$@%<^+?*]' $(MAKEFILE_LIST) | grep -v "^#" | grep -v '\$$\$$' >/dev/null 2>&1; then \
+		echo "$(COLOR_YELLOW)⚠$(COLOR_RESET)  Possible unprotected variable references found"; \
+	fi
+	@# Verify .PHONY declarations exist
+	@if ! grep -q "^\.PHONY:" $(MAKEFILE_LIST); then \
+		echo "$(COLOR_RED)✗$(COLOR_RESET) No .PHONY declarations found"; \
+		exit 1; \
+	fi
+	@echo "$(COLOR_GREEN)✓$(COLOR_RESET) Makefile syntax validated"
+
+check-shell: ## Validate shell scripts with shellcheck (if available)
+	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Checking shell scripts..."
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		echo "  Running shellcheck on test scripts..."; \
+		shellcheck tests/local-dev-test.sh 2>/dev/null || echo "$(COLOR_YELLOW)⚠$(COLOR_RESET)  shellcheck warnings in tests/local-dev-test.sh"; \
+		if [ -d e2e/scripts ]; then \
+			shellcheck e2e/scripts/*.sh 2>/dev/null || echo "$(COLOR_YELLOW)⚠$(COLOR_RESET)  shellcheck warnings in e2e scripts"; \
+		fi; \
+		echo "$(COLOR_GREEN)✓$(COLOR_RESET) Shell scripts checked"; \
+	else \
+		echo "$(COLOR_YELLOW)⚠$(COLOR_RESET)  shellcheck not installed (optional)"; \
+		echo "  Install with: brew install shellcheck (macOS) or apt-get install shellcheck (Linux)"; \
+	fi
+
+makefile-health: check-minikube check-kubectl ## Run comprehensive Makefile health check
+	@echo "$(COLOR_BOLD)🏥 Makefile Health Check$(COLOR_RESET)"
+	@echo ""
+	@echo "$(COLOR_BOLD)Prerequisites:$(COLOR_RESET)"
+	@minikube version >/dev/null 2>&1 && echo "$(COLOR_GREEN)✓$(COLOR_RESET) minikube available" || echo "$(COLOR_RED)✗$(COLOR_RESET) minikube missing"
+	@kubectl version --client >/dev/null 2>&1 && echo "$(COLOR_GREEN)✓$(COLOR_RESET) kubectl available" || echo "$(COLOR_RED)✗$(COLOR_RESET) kubectl missing"
+	@command -v $(CONTAINER_ENGINE) >/dev/null 2>&1 && echo "$(COLOR_GREEN)✓$(COLOR_RESET) $(CONTAINER_ENGINE) available" || echo "$(COLOR_RED)✗$(COLOR_RESET) $(CONTAINER_ENGINE) missing"
+	@echo ""
+	@echo "$(COLOR_BOLD)Configuration:$(COLOR_RESET)"
+	@echo "  CONTAINER_ENGINE = $(CONTAINER_ENGINE)"
+	@echo "  NAMESPACE = $(NAMESPACE)"
+	@echo "  PLATFORM = $(PLATFORM)"
+	@echo ""
+	@$(MAKE) --no-print-directory validate-makefile
+	@echo ""
+	@echo "$(COLOR_GREEN)✓ Makefile health check complete$(COLOR_RESET)"
 
 local-test-dev: ## Run local developer experience tests
 	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Running local developer experience tests..."
