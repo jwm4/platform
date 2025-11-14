@@ -126,11 +126,11 @@ local-up: check-minikube check-kubectl ## Start local development environment (m
 	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Step 4/8: Creating namespace..."
 	@kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1
 	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Step 5/8: Applying CRDs and RBAC..."
-	@kubectl apply -f components/manifests/crds/ >/dev/null 2>&1 || true
-	@kubectl apply -f components/manifests/rbac/ >/dev/null 2>&1 || true
+	@kubectl apply -f components/manifests/base/crds/ >/dev/null 2>&1 || true
+	@kubectl apply -f components/manifests/base/rbac/ >/dev/null 2>&1 || true
 	@kubectl apply -f components/manifests/minikube/local-dev-rbac.yaml >/dev/null 2>&1 || true
 	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Step 6/8: Creating storage..."
-	@kubectl apply -f components/manifests/workspace-pvc.yaml -n $(NAMESPACE) >/dev/null 2>&1 || true
+	@kubectl apply -f components/manifests/base/workspace-pvc.yaml -n $(NAMESPACE) >/dev/null 2>&1 || true
 	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Step 7/8: Deploying services..."
 	@kubectl apply -f components/manifests/minikube/backend-deployment.yaml >/dev/null 2>&1
 	@kubectl apply -f components/manifests/minikube/backend-service.yaml >/dev/null 2>&1

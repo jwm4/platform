@@ -343,13 +343,30 @@ func isLocalDevEnvironment() bool {
 		namespace = "default"
 	}
 
-	// Reject if namespace contains 'prod' or is the default production namespace
-	if strings.Contains(strings.ToLower(namespace), "prod") {
-		log.Printf("Refusing dev mode in production-like namespace: %s", namespace)
+	// SECURITY: Use allow-list approach to restrict dev mode to specific namespaces
+	// This prevents accidental activation in staging, qa, demo, or other non-production environments
+	allowedNamespaces := []string{
+		"ambient-code", // Default minikube namespace
+		"default",      // Local testing
+		"vteam-dev",    // Legacy local dev namespace
+	}
+
+	isAllowed := false
+	for _, allowed := range allowedNamespaces {
+		if namespace == allowed {
+			isAllowed = true
+			break
+		}
+	}
+
+	if !isAllowed {
+		log.Printf("Refusing dev mode in non-whitelisted namespace: %s", namespace)
+		log.Printf("Dev mode only allowed in: %v", allowedNamespaces)
+		log.Printf("SECURITY: Dev mode uses elevated permissions and should NEVER run outside local development")
 		return false
 	}
 
-	log.Printf("Local dev environment validated: env=%s namespace=%s", env, namespace)
+	log.Printf("Local dev environment validated: env=%s namespace=%s (whitelisted)", env, namespace)
 	return true
 }
 

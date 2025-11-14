@@ -65,7 +65,7 @@ jobs:
         kubectl apply -f components/manifests/base/crds/projectsettings-crd.yaml
         
         echo "Creating PersistentVolumeClaim..."
-        kubectl apply -f components/manifests/base/workspace-pvc.yaml
+        kubectl apply -f components/manifests/base/workspace-pvc.yaml -n ambient-code
         
         echo "Setting up RBAC..."
         kubectl apply -f components/manifests/minikube/local-dev-rbac.yaml
