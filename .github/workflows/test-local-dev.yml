@@ -6,32 +6,152 @@ on:
 jobs:
   test-local-dev-simulation:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
+    
+    - name: Install minikube and kubectl
+      run: |
+        # Install kubectl
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        
+        # Install minikube
+        curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        sudo install minikube-linux-amd64 /usr/local/bin/minikube
+        
+        # Verify installations
+        kubectl version --client
+        minikube version
+    
+    - name: Start minikube
+      run: |
+        minikube start --driver=docker --memory=4096 --cpus=2
+        minikube addons enable ingress
+        minikube addons enable storage-provisioner
+        kubectl cluster-info
+        
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
       
-    - name: Validate local dev scripts
+    - name: Build and load images
       run: |
-        echo "Validating local development scripts..."
-        # Check if scripts exist and are executable
-        test -f components/scripts/local-dev/crc-start.sh
-        test -f components/scripts/local-dev/crc-test.sh
-        test -f components/scripts/local-dev/crc-stop.sh
+        # Build images using minikube's docker daemon
+        eval $(minikube docker-env)
         
-        # Validate script syntax
-        bash -n components/scripts/local-dev/crc-start.sh
-        bash -n components/scripts/local-dev/crc-test.sh
-        bash -n components/scripts/local-dev/crc-stop.sh
+        echo "Building backend..."
+        docker build -t vteam-backend:latest components/backend
         
-        echo "All local development scripts are valid"
+        echo "Building frontend..."
+        docker build -t vteam-frontend:latest components/frontend
         
-    - name: Test Makefile targets
+        echo "Building operator..."
+        docker build -t vteam-operator:latest components/operator
+        
+        echo "Images built successfully"
+        docker images | grep vteam
+    
+    - name: Deploy application
       run: |
-        echo "Testing Makefile targets..."
-        # Test that the targets exist (dry run)
-        make -n dev-start
-        make -n dev-test
-        make -n dev-stop
-        echo "All Makefile targets are valid"
+        echo "Creating namespace..."
+        kubectl create namespace ambient-code
+        kubectl label namespace ambient-code ambient-code.io/managed=true
+        
+        echo "Installing CRDs..."
+        kubectl apply -f components/manifests/base/crds/
+        
+        echo "Setting up RBAC..."
+        kubectl apply -f components/manifests/minikube/local-dev-rbac.yaml
+        
+        echo "Deploying backend..."
+        kubectl apply -f components/manifests/minikube/backend-deployment.yaml
+        kubectl apply -f components/manifests/minikube/backend-service.yaml
+        
+        echo "Deploying frontend..."
+        kubectl apply -f components/manifests/minikube/frontend-deployment.yaml
+        kubectl apply -f components/manifests/minikube/frontend-service.yaml
+        
+        echo "Deploying operator..."
+        kubectl apply -f components/manifests/minikube/operator-deployment.yaml
+        
+        echo "Setting up ingress..."
+        kubectl apply -f components/manifests/minikube/ingress.yaml
+        
+        echo "Waiting for deployments to be ready..."
+        kubectl wait --for=condition=available --timeout=120s deployment/backend-api -n ambient-code || true
+        kubectl wait --for=condition=available --timeout=120s deployment/frontend -n ambient-code || true
+        kubectl wait --for=condition=available --timeout=120s deployment/agentic-operator -n ambient-code || true
+        
+        echo "Deployment status:"
+        kubectl get pods -n ambient-code
+    
+    - name: Run comprehensive test suite
+      run: |
+        echo "Running local development test suite..."
+        chmod +x tests/local-dev-test.sh
+        
+        # Run tests in CI mode (known failures tracked separately)
+        ./tests/local-dev-test.sh --skip-setup --ci || {
+          echo "Test suite failed - showing debugging information..."
+          
+          # Show pod logs for debugging
+          echo "=== Backend logs ==="
+          kubectl logs -n ambient-code -l app=backend-api --tail=100 || true
+          
+          echo "=== Operator logs ==="
+          kubectl logs -n ambient-code -l app=agentic-operator --tail=100 || true
+          
+          echo "=== Frontend logs ==="
+          kubectl logs -n ambient-code -l app=frontend --tail=50 || true
+          
+          exit 1
+        }
+    
+    - name: Validate production manifest safety
+      if: always()
+      run: |
+        echo "Validating production manifests do NOT contain dev mode variables..."
+        
+        # Check base and production manifests for DISABLE_AUTH
+        for manifest in components/manifests/base/*.yaml components/manifests/overlays/production/*.yaml; do
+          if [ -f "$manifest" ]; then
+            if grep -q "DISABLE_AUTH" "$manifest"; then
+              echo "❌ CRITICAL: Production manifest contains DISABLE_AUTH: $manifest"
+              exit 1
+            fi
+            
+            if grep -qE "ENVIRONMENT.*[\"']?(local|development)[\"']?" "$manifest"; then
+              echo "❌ CRITICAL: Production manifest sets ENVIRONMENT=local/development: $manifest"
+              exit 1
+            fi
+          fi
+        done
+        
+        echo "✅ All production manifests are safe"
+        
+    - name: Show deployment status
+      if: always()
+      run: |
+        echo "=== Namespace ==="
+        kubectl get namespace ambient-code || true
+        
+        echo "=== Pods ==="
+        kubectl get pods -n ambient-code || true
+        
+        echo "=== Services ==="
+        kubectl get svc -n ambient-code || true
+        
+        echo "=== Ingress ==="
+        kubectl get ingress -n ambient-code || true
+        
+        echo "=== CRDs ==="
+        kubectl get crd | grep vteam || true
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        kubectl delete namespace ambient-code --ignore-not-found=true || true
+        minikube delete || true
