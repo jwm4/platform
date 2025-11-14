@@ -14,32 +14,31 @@ kind: Role
 metadata:
   name: local-dev-user
   namespace: ambient-code
-spec:
-  rules:
-  # ProjectSettings CRD access
-  - apiGroups: ["vteam.ambient-code"]
-    resources: ["projectsettings"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # AgenticSessions CRD access
-  - apiGroups: ["vteam.ambient-code"]
-    resources: ["agenticsessions"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # RFE Workflows CRD access
-  - apiGroups: ["vteam.ambient-code"]
-    resources: ["rfeworkflows"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # Core resources
-  - apiGroups: [""]
-    resources: ["namespaces", "pods", "services", "secrets", "serviceaccounts", "configmaps"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # Jobs
-  - apiGroups: ["batch"]
-    resources: ["jobs"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+rules:
+# ProjectSettings CRD access
+- apiGroups: ["vteam.ambient-code"]
+  resources: ["projectsettings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# AgenticSessions CRD access
+- apiGroups: ["vteam.ambient-code"]
+  resources: ["agenticsessions"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# RFE Workflows CRD access
+- apiGroups: ["vteam.ambient-code"]
+  resources: ["rfeworkflows"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Core resources
+- apiGroups: [""]
+  resources: ["namespaces", "pods", "services", "secrets", "serviceaccounts", "configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Jobs
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 # RoleBinding for local dev user
 apiVersion: rbac.authorization.k8s.io/v1
