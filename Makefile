@@ -319,7 +319,7 @@ makefile-health: check-minikube check-kubectl ## Run comprehensive Makefile heal
 
 local-test-dev: ## Run local developer experience tests
 	@echo "$(COLOR_BLUE)▶$(COLOR_RESET) Running local developer experience tests..."
-	@./tests/local-dev-test.sh
+	@./tests/local-dev-test.sh $(if $(filter true,$(CI_MODE)),--ci,)
 
 local-test-quick: check-kubectl check-minikube ## Quick smoke test of local environment
 	@echo "$(COLOR_BOLD)🧪 Quick Smoke Test$(COLOR_RESET)"
