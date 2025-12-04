@@ -64,13 +64,12 @@ func isLocalDevEnvironment() bool {
 
 ### 🟢 **MITIGATED: Allow-List Namespace Validation**
 
-**Current:** Uses allow-list of specific namespaces (ambient-code, default, vteam-dev)
+**Current:** Uses allow-list of specific namespaces (ambient-code, vteam-dev)
 
 **Protection:**
 ```bash
 # Would PASS (correctly enable dev mode):
 NAMESPACE=ambient-code DISABLE_AUTH=true ENVIRONMENT=local  # ✅ Allowed
-NAMESPACE=default DISABLE_AUTH=true ENVIRONMENT=local       # ✅ Allowed
 NAMESPACE=vteam-dev DISABLE_AUTH=true ENVIRONMENT=local     # ✅ Allowed
 
 # Would FAIL (correctly reject):
@@ -110,8 +109,7 @@ func isLocalDevEnvironment() bool {
     // ALLOW-LIST approach instead of DENY-LIST
     allowedNamespaces := []string{
         "ambient-code",    // Default minikube namespace
-        "default",         // Local testing
-        "vteam-dev",       // Old local dev namespace
+        "vteam-dev",       // Legacy local dev namespace
     }
     
     namespace := os.Getenv("NAMESPACE")
