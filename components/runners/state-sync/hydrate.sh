@@ -64,10 +64,9 @@ mkdir -p /workspace/artifacts || error_exit "Failed to create artifacts director
 mkdir -p /workspace/file-uploads || error_exit "Failed to create file-uploads directory"
 mkdir -p /workspace/repos || error_exit "Failed to create repos directory"
 
-# Set permissions for .claude (must be writable by user 1001)
-# Use 777 since we can't chown without root privileges
-# fsGroup:0 ensures files created by any container are in group 0
-chmod -R 777 "${CLAUDE_DATA_PATH}" || error_exit "Failed to set permissions on .claude"
+# Set permissions for .claude (best-effort; may be restricted by SCC)
+# If the SCC assigns an fsGroup, the directory should already be writable.
+chmod -R 777 "${CLAUDE_DATA_PATH}" 2>/dev/null || echo "Warning: failed to chmod ${CLAUDE_DATA_PATH} (continuing)"
 
 # Other directories - standard permissions
 chmod 755 /workspace/artifacts /workspace/file-uploads /workspace/repos 2>/dev/null || true

@@ -1294,7 +1294,9 @@ class ClaudeCodeAdapter:
         """Load MCP server configuration from the ambient runner's .mcp.json file."""
         try:
             # Allow override via MCP_CONFIG_FILE env var (useful for e2e with minimal MCPs)
-            mcp_config_file = self.context.get_env('MCP_CONFIG_FILE', '/app/claude-runner/.mcp.json')
+            mcp_config_file = self.context.get_env('MCP_CONFIG_FILE')
+            if not mcp_config_file or not str(mcp_config_file).strip():
+                mcp_config_file = "/app/claude-runner/.mcp.json"
             runner_mcp_file = Path(mcp_config_file)
 
             if runner_mcp_file.exists() and runner_mcp_file.is_file():
