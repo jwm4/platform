@@ -82,7 +82,7 @@ def build_allowed_tools(mcp_servers: dict) -> list[str]:
     """Build the list of allowed tool names from default tools + MCP servers."""
     allowed = list(DEFAULT_ALLOWED_TOOLS)
     for server_name in mcp_servers.keys():
-        allowed.append(f"mcp__{server_name}")
+        allowed.append(f"mcp__{server_name}__*")
     logger.info(f"MCP tool permissions granted for servers: {list(mcp_servers.keys())}")
     return allowed
 
