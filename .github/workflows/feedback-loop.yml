@@ -1,0 +1,77 @@
+name: Corrections Feedback Loop
+
+on:
+  schedule:
+    # Weekly on Monday at 9am UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      since_days:
+        description: 'Number of days to look back for corrections'
+        required: false
+        default: '7'
+      min_corrections:
+        description: 'Minimum corrections per group to trigger improvement'
+        required: false
+        default: '2'
+      dry_run:
+        description: 'Dry run (query and report without creating sessions)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  feedback-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r scripts/feedback-loop/requirements.txt
+
+      - name: Query corrections and create improvement sessions
+        id: feedback
+        env:
+          LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          AMBIENT_API_URL: ${{ secrets.AMBIENT_API_URL }}
+          AMBIENT_BOT_TOKEN: ${{ secrets.AMBIENT_BOT_TOKEN }}
+          AMBIENT_PROJECT: ${{ secrets.AMBIENT_PROJECT }}
+          REPOS_FILTER: ${{ secrets.FEEDBACK_LOOP_REPOS_FILTER }}
+        run: |
+          python scripts/feedback-loop/query_corrections.py \
+            --langfuse-host "$LANGFUSE_HOST" \
+            --langfuse-public-key "$LANGFUSE_PUBLIC_KEY" \
+            --langfuse-secret-key "$LANGFUSE_SECRET_KEY" \
+            --api-url "$AMBIENT_API_URL" \
+            --api-token "$AMBIENT_BOT_TOKEN" \
+            --project "$AMBIENT_PROJECT" \
+            --since-days "${{ github.event.inputs.since_days || '7' }}" \
+            --min-corrections "${{ github.event.inputs.min_corrections || '2' }}" \
+            --output-file /tmp/feedback-output.json \
+            --repos-filter "$REPOS_FILTER" \
+            ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "### Feedback Loop Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f /tmp/feedback-output.json ]; then
+            CORRECTIONS=$(python3 -c "import json; d=json.load(open('/tmp/feedback-output.json')); print(d.get('corrections_found', 0))")
+            SESSIONS=$(python3 -c "import json; d=json.load(open('/tmp/feedback-output.json')); print(d.get('sessions_created', 0))")
+            echo "- **Corrections found**: $CORRECTIONS" >> $GITHUB_STEP_SUMMARY
+            echo "- **Sessions created**: $SESSIONS" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- No output file generated" >> $GITHUB_STEP_SUMMARY
+          fi

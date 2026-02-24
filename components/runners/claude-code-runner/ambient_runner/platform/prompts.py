@@ -39,7 +39,11 @@ GIT_PUSH_STEPS = (
     "\nAfter making changes to any auto-push repository:\n"
     "1. Use `git add` to stage your changes\n"
     '2. Use `git commit -m "description"` to commit with a descriptive message\n'
-    "3. Use `git push origin {branch}` to push to the remote repository\n\n"
+    "3. Use `git push -u origin {branch}` to push to the remote repository\n"
+    "   (this creates the branch on the remote if it doesn't exist yet)\n"
+    "4. Create a pull request using `gh pr create` targeting the default branch\n\n"
+    "**IMPORTANT**: NEVER push directly to `main` or `master`. Always work on "
+    "the feature branch (`{branch}`). If push fails, do NOT fall back to main.\n\n"
 )
 
 RUBRIC_EVALUATION_HEADER = "## Rubric Evaluation\n\n"
@@ -63,6 +67,14 @@ RESTART_TOOL_DESCRIPTION = (
     "Restart the Claude session to recover from issues, clear state, "
     "or get a fresh connection. Use this if you detect you're in a "
     "broken state or need to reset."
+)
+
+CORRECTION_DETECTION_INSTRUCTIONS = (
+    "## CRITICAL: Automatic Correction Logging\n\n"
+    "**BEFORE acting on user feedback that changes something you already did or assumed, ALWAYS ask yourself: \"Is the user steering me away from a previous action or decision?\"**\n\n"
+    "If YES → Call `log_correction` FIRST, then fix.\n\n"
+    "**Rule: Any message that redirects, corrects, or changes your previous work or assumptions = log it. When in doubt, log it.**\n\n"
+    "This includes quality issues, but also: redirections, preference changes, missed requirements, wrong scope, or any context that changes what you should have done. Do NOT treat these as simple new requests.\n"
 )
 
 
@@ -156,7 +168,12 @@ def build_workspace_context_prompt(
             repo for repo in repos_cfg if repo.get("autoPush", False)
         ]
         if auto_push_repos:
-            push_branch = feature_branch or "ambient/<session-id>"
+            if not feature_branch:
+                logger.warning(
+                    "AGENTIC_SESSION_NAME not set; git-push prompt will "
+                    "use placeholder branch name"
+                )
+            push_branch = feature_branch or "ambient/<session-name>"
             prompt += GIT_PUSH_INSTRUCTIONS_HEADER
             prompt += GIT_PUSH_INSTRUCTIONS_BODY
             for repo in auto_push_repos:
@@ -176,6 +193,14 @@ def build_workspace_context_prompt(
 
     # Rubric evaluation instructions
     prompt += _build_rubric_prompt_section(ambient_config)
+
+    # Corrections feedback instructions (only when Langfuse is configured)
+    langfuse_enabled = os.getenv("LANGFUSE_ENABLED", "").strip().lower() in (
+        "1", "true", "yes"
+    )
+    if langfuse_enabled:
+        prompt += "## Corrections Feedback\n\n"
+        prompt += CORRECTION_DETECTION_INSTRUCTIONS
 
     return prompt
 
