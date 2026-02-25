@@ -228,7 +228,7 @@ function handleRunFinished(
       id: state.currentMessage.id || crypto.randomUUID(),
       role: 'assistant' as const,
       content: state.currentMessage.content,
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
@@ -242,7 +242,7 @@ function handleRunFinished(
       role: 'assistant' as const,
       content: state.currentReasoning.content,
       metadata: { type: 'reasoning_block' },
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
@@ -261,7 +261,7 @@ function handleRunFinished(
         thinking: thinkingText,
         signature: '',
       },
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
@@ -292,7 +292,7 @@ function handleTextMessageStart(
     id: event.messageId || null,
     role: event.role,
     content: '',
-    timestamp: String(event.timestamp ?? ''),
+    timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
   }
   return state
 }
@@ -342,7 +342,7 @@ function handleTextMessageEnd(
         id: messageId,
         role: state.currentMessage.role || 'assistant',
         content: state.currentMessage.content,
-        timestamp: String(event.timestamp ?? ''),
+        timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
       } as PlatformMessage
       state.messages = [...state.messages, msg]
       callbacks.onMessage?.(msg)
@@ -382,7 +382,7 @@ function handleToolCallStart(
     args: '',
     parentToolUseId: effectiveParentToolId,
     parentMessageId: parentMessageId,
-    timestamp: String(event.timestamp ?? ''),
+    timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
   })
   state.pendingToolCalls = updatedPending
 
@@ -564,7 +564,7 @@ function handleToolCallEnd(
       content: '',
       toolCallId: toolCallId,
       toolCalls: [completedToolCall],
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     messages.push(toolMessage)
     callbacks.onMessage?.(toolMessage)
@@ -854,7 +854,7 @@ function handleReasoningMessageStart(
   state.currentReasoning = {
     id: event.messageId || null,
     content: '',
-    timestamp: String(event.timestamp ?? ''),
+    timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
   }
   return state
 }
@@ -883,7 +883,7 @@ function handleReasoningMessageEnd(
       role: 'assistant' as const,
       content: state.currentReasoning.content,
       metadata: { type: 'reasoning_block' },
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
@@ -929,7 +929,7 @@ function handleRawEvent(
         thinking: String(rawData.thinking ?? ''),
         signature: String(rawData.signature ?? ''),
       },
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
@@ -946,7 +946,7 @@ function handleRawEvent(
         id: messageId,
         role: 'user' as const,
         content: String(rawData.content),
-        timestamp: String(event.timestamp ?? ''),
+        timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
       } as PlatformMessage
       state.messages = [...state.messages, msg]
       callbacks.onMessage?.(msg)
@@ -960,7 +960,7 @@ function handleRawEvent(
       id: String(rawData.id ?? '') || crypto.randomUUID(),
       role: String(rawData.role),
       content: String(rawData.content),
-      timestamp: String(event.timestamp ?? ''),
+      timestamp: new Date(event.timestamp ?? Date.now()).toISOString(),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
@@ -1025,7 +1025,7 @@ function handleThinkingMessageEnd(
         thinking: thinkingText,
         signature: '',
       },
-      timestamp: String(event.timestamp ?? state.currentThinking.timestamp ?? ''),
+      timestamp: event.timestamp ? new Date(event.timestamp).toISOString() : (state.currentThinking.timestamp || new Date().toISOString()),
     } as PlatformMessage
     state.messages = [...state.messages, msg]
     callbacks.onMessage?.(msg)
