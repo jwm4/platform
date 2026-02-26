@@ -251,7 +251,6 @@ TOKEN=$(kubectl get secret test-user-token -n ambient-code \
 cat > .env.local <<EOF
 OC_TOKEN=$TOKEN
 BACKEND_URL=http://localhost:8081/api
-NEXT_PUBLIC_E2E_TOKEN=$TOKEN
 EOF
 
 npm run dev
