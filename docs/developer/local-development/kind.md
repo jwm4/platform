@@ -171,6 +171,8 @@ make kind-up LOCAL_VERTEX=true \
 **Reconfigure existing cluster:**
 ```bash
 # If cluster is already running, run the setup script directly
+# GOOGLE_APPLICATION_CREDENTIALS must be set (not just passed to make)
+export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/application_default_credentials.json
 ./scripts/setup-vertex-kind.sh
 ```
 
@@ -206,9 +208,79 @@ CONTAINER_REGISTRY=quay.io/your-org
 make kind-down && make kind-up
 ```
 
+### Running Sessions (Not Just E2E Tests)
+
+To run interactive sessions from the UI (not just automated e2e tests), the operator
+needs a runner secret in each project namespace. The `e2e/.env` `ANTHROPIC_API_KEY`
+only applies to e2e test setup — it does not create secrets in user-created projects.
+
+**With a direct Anthropic API key:**
+```bash
+kubectl create secret generic ambient-runner-secrets \
+  --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
+  -n <your-project-namespace>
+```
+
+**With Vertex AI:** The `setup-vertex-kind.sh` script creates the `ambient-vertex`
+secret in `ambient-code`, but you also need it (and the runner secret) in each
+project namespace:
+```bash
+kubectl create secret generic ambient-runner-secrets \
+  --from-literal=PLACEHOLDER=true -n <your-project-namespace>
+kubectl get secret ambient-vertex -n ambient-code -o json \
+  | jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp)' \
+  | kubectl apply -n <your-project-namespace> -f -
+```
+
+### Running Frontend Locally (Fast Iteration)
+
+For frontend-only changes, skip image rebuilds entirely. Run NextJS with
+hot-reload against the kind cluster backend:
+
+```bash
+# Terminal 1: port-forward the backend
+kubectl port-forward svc/backend-service 8081:8080 -n ambient-code
+
+# Terminal 2: start the frontend dev server
+cd components/frontend
+npm install  # first time only
+
+# Create .env.local with the test user token
+TOKEN=$(kubectl get secret test-user-token -n ambient-code \
+  -o jsonpath='{.data.token}' | base64 -d)
+cat > .env.local <<EOF
+OC_TOKEN=$TOKEN
+BACKEND_URL=http://localhost:8081/api
+NEXT_PUBLIC_E2E_TOKEN=$TOKEN
+EOF
+
+npm run dev
+# Open http://localhost:3000
+```
+
+Every file save triggers instant hot-reload — no Docker build, no kind load,
+no rollout restart. See [Hybrid Local Development](hybrid.md) for more details.
+
 ---
 
 ## Troubleshooting
+
+### Insufficient memory
+
+**Symptom:** Pods stuck in `Pending` with "Insufficient memory" events.
+
+**Cause:** The single-node kind cluster has limited memory. Running all
+platform pods plus session runner pods can exceed it.
+
+**Fix:** Scale down non-essential deployments:
+```bash
+# These are safe to remove for local development
+kubectl scale deployment ambient-api-server ambient-api-server-db \
+  public-api unleash --replicas=0 -n ambient-code
+
+# If running frontend locally, also scale down the in-cluster frontend
+kubectl scale deployment frontend --replicas=0 -n ambient-code
+```
 
 ### Cluster won't start
 

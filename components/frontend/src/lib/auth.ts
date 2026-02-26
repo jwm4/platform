@@ -48,7 +48,10 @@ export function buildForwardHeaders(request: Request, extra?: Record<string, str
   if (xfUsername) headers['X-Forwarded-Preferred-Username'] = xfUsername;
   if (xfGroups) headers['X-Forwarded-Groups'] = xfGroups;
   if (project) headers['X-OpenShift-Project'] = project;
-  if (token) headers['X-Forwarded-Access-Token'] = token;
+  if (token) {
+    headers['X-Forwarded-Access-Token'] = token;
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   // If still missing identity info, use environment (helpful for local oc login)
   if (!headers['X-Forwarded-User'] && process.env.OC_USER) {
@@ -64,6 +67,7 @@ export function buildForwardHeaders(request: Request, extra?: Record<string, str
   // Add token fallback for local development
   if (!headers['X-Forwarded-Access-Token'] && process.env.OC_TOKEN) {
     headers['X-Forwarded-Access-Token'] = process.env.OC_TOKEN;
+    headers['Authorization'] = `Bearer ${process.env.OC_TOKEN}`;
   }
 
   // Optional dev-only automatic discovery via oc CLI
