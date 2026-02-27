@@ -210,26 +210,20 @@ make kind-down && make kind-up
 
 ### Running Sessions (Not Just E2E Tests)
 
-To run interactive sessions from the UI (not just automated e2e tests), the operator
-needs a runner secret in each project namespace. The `e2e/.env` `ANTHROPIC_API_KEY`
-only applies to e2e test setup — it does not create secrets in user-created projects.
+To run interactive sessions from the UI (not just automated e2e tests), the runner
+needs credentials. How you set this up depends on your AI provider:
 
-**With a direct Anthropic API key:**
+**With Vertex AI (recommended):** Run `setup-vertex-kind.sh` (see [Vertex AI](#vertex-ai-optional)
+above). Sessions work out of the box — the operator automatically copies the
+`ambient-vertex` secret into each project namespace and skips `ambient-runner-secrets`
+validation.
+
+**With a direct Anthropic API key:** You must create the runner secret in each project
+namespace manually (the `e2e/.env` `ANTHROPIC_API_KEY` only applies to e2e test setup):
 ```bash
 kubectl create secret generic ambient-runner-secrets \
   --from-literal=ANTHROPIC_API_KEY=sk-ant-... \
   -n <your-project-namespace>
-```
-
-**With Vertex AI:** The `setup-vertex-kind.sh` script creates the `ambient-vertex`
-secret in `ambient-code`, but you also need it (and the runner secret) in each
-project namespace:
-```bash
-kubectl create secret generic ambient-runner-secrets \
-  --from-literal=PLACEHOLDER=true -n <your-project-namespace>
-kubectl get secret ambient-vertex -n ambient-code -o json \
-  | jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp)' \
-  | kubectl apply -n <your-project-namespace> -f -
 ```
 
 ### Running Frontend Locally (Fast Iteration)
@@ -246,6 +240,7 @@ cd components/frontend
 npm install  # first time only
 
 # Create .env.local with the test user token
+# .env.local is gitignored — do NOT commit it (contains a live cluster token)
 TOKEN=$(kubectl get secret test-user-token -n ambient-code \
   -o jsonpath='{.data.token}' | base64 -d)
 cat > .env.local <<EOF

@@ -69,7 +69,7 @@ export function buildForwardHeaders(request: Request, extra?: Record<string, str
   if (!headers['X-Forwarded-Email'] && process.env.OC_EMAIL) {
     headers['X-Forwarded-Email'] = process.env.OC_EMAIL;
   }
-  
+
   // Add token fallback for local development
   if (!headers['X-Forwarded-Access-Token'] && process.env.OC_TOKEN) {
     headers['X-Forwarded-Access-Token'] = process.env.OC_TOKEN;
@@ -83,11 +83,11 @@ export function buildForwardHeaders(request: Request, extra?: Record<string, str
   const needsIdentity = !headers['X-Forwarded-User'] && !headers['X-Forwarded-Preferred-Username'];
   const needsToken = !headers['X-Forwarded-Access-Token'];
 
-  // We cannot await top-level in this sync function, so expose best-effort sync
-  // pattern by stashing promises on the object and resolving outside if needed.
-  // For simplicity, perform a lazy, best-effort fetch and only if in server runtime.
+  // Best-effort async discovery — the IIFE resolves *after* this function
+  // returns, so these mutations only help callers that hold a reference to
+  // `headers` long enough (e.g. long-lived SSE connections). For reliable
+  // oc CLI discovery, use buildForwardHeadersAsync instead.
   if (enableOc && runningInNode && (needsIdentity || needsToken)) {
-    // Fire-and-forget: we won't block the request if oc isn't present
     (async () => {
       try {
         if (needsIdentity) {
